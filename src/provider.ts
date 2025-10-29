@@ -89,7 +89,7 @@ export class NodeLlamaCppProvider {
         if (config.modelId) {
             this.modelId = config.modelId;
         } else {
-            this.modelId = config.model.split("/").slice(1).join("/");
+            this.modelId = config.model.replace("hf:", "");
         }
 
         if (config.providerId) {
@@ -315,9 +315,11 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                                 if (functionCall) {
                                     // Extract the actual value from the tool result
                                     // AI SDK wraps it in { type: "text" | "json", value: ... }
-                                    const result = part.output.type === "json" || part.output.type === "text"
-                                        ? part.output.value
-                                        : part.output;
+                                    const result =
+                                        part.output.type === "json" ||
+                                        part.output.type === "text"
+                                            ? part.output.value
+                                            : part.output;
 
                                     functionCall.result = result;
                                 }
@@ -328,6 +330,7 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                 }
 
                 default:
+                    // @ts-expect-error
                     console.warn(`Unsupported message role: ${message.role}`);
             }
         }
