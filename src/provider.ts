@@ -1,7 +1,4 @@
-/**
- * AI SDK Provider for node-llama-cpp
- * Auto-initializes the model and provides a simple interface
- */
+import chalk from "chalk";
 import type {
     LanguageModelV2,
     LanguageModelV2StreamPart,
@@ -26,6 +23,11 @@ export interface NodeLlamaCppProviderConfig {
      * Model identifier (for display purposes)
      */
     modelId?: string;
+
+    /**
+     * Provider identifier (for display purposes)
+     */
+    providerId?: string;
 
     /**
      * Path or HuggingFace model identifier
@@ -74,6 +76,7 @@ export interface NodeLlamaCppProviderConfig {
 
 export class NodeLlamaCppProvider {
     readonly modelId: string;
+    readonly providerId: string;
     private session: LlamaChatSession | null = null;
     private llamaModel: LlamaModel | null = null;
     private llamaContext: LlamaContext | null = null;
@@ -82,7 +85,21 @@ export class NodeLlamaCppProvider {
 
     constructor(config: NodeLlamaCppProviderConfig) {
         this.config = config;
-        this.modelId = config.modelId || "node-llama-cpp";
+        if (config.modelId) {
+            this.modelId = config.modelId;
+        } else {
+            this.modelId = config.model.split("/").slice(1).join("/");
+        }
+
+        if (config.providerId) {
+            this.providerId = config.providerId;
+        } else {
+            let providerId = "node-llama-cpp";
+            if (config.model.startsWith("hf:")) {
+                providerId = "🤗 Hugging Face";
+            }
+            this.providerId = providerId;
+        }
 
         // If session is provided, use it
         if (config.session) {
@@ -122,18 +139,26 @@ export class NodeLlamaCppProvider {
 
             // Load model if not provided
             if (!this.llamaModel) {
-                console.log(`Loading model: ${this.config.model}`);
+                console.log(
+                    `${chalk.blue("ℹ")} Loading model: ${this.config.model}`
+                );
                 this.llamaModel = await llama.loadModel({
                     modelPath,
                     gpuLayers: this.config.gpuLayers,
                 });
-                console.log(`Model loaded ✅`);
+                const bytes = this.llamaModel?.fileInsights?.modelSize;
+                const gigabytes = bytes / 1024 / 1024 / 1024;
+                console.log(
+                    `${chalk.green("✔")} Model loaded ${
+                        bytes ? `${gigabytes.toFixed(2)} GB` : ""
+                    }`
+                );
             }
 
             // Create context if not provided
             if (!this.llamaContext) {
                 this.llamaContext = await this.llamaModel.createContext({
-                    contextSize: { max: this.config.contextSize },
+                    contextSize: this.config.contextSize,
                 });
             }
 
@@ -155,6 +180,7 @@ export class NodeLlamaCppProvider {
         return new NodeLlamaCppLanguageModel({
             provider: this,
             modelId: modelId || this.modelId,
+            providerId: this.providerId,
         });
     }
 
@@ -173,13 +199,18 @@ export class NodeLlamaCppProvider {
 class NodeLlamaCppLanguageModel implements LanguageModelV2 {
     readonly specificationVersion = "v2" as const;
     readonly modelId: string;
-    readonly provider = "node-llama-cpp";
+    readonly provider: string;
     readonly supportedUrls = {};
     private providerInstance: NodeLlamaCppProvider;
 
-    constructor(settings: { provider: NodeLlamaCppProvider; modelId: string }) {
+    constructor(settings: {
+        provider: NodeLlamaCppProvider;
+        modelId: string;
+        providerId: string;
+    }) {
         this.providerInstance = settings.provider;
         this.modelId = settings.modelId;
+        this.provider = settings.providerId;
     }
 
     private extractPromptText(

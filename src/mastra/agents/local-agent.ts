@@ -3,9 +3,9 @@ import { Memory } from "@mastra/memory";
 import { createNodeLlamaCppProvider } from "../../provider";
 
 const provider = createNodeLlamaCppProvider({
-    model: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf",
-    modelId: "gpt-oss-20b",
-    contextSize: 8096,
+    // model: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf",
+    model: "hf:unsloth/gpt-oss-20b-GGUF/gpt-oss-20b-F16.gguf",
+    // model: "hf:unsloth/gpt-oss-20b-GGUF/gpt-oss-20b-Q2_K.gguf",
     modelsDirectory: "../../models",
 });
 
