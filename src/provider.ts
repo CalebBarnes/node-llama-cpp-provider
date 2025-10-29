@@ -213,29 +213,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
         this.provider = settings.providerId;
     }
 
-    private extractPromptText(
-        prompt: Parameters<LanguageModelV2["doGenerate"]>[0]["prompt"]
-    ): string {
-        // prompt is an array of messages
-        const lastMessage = prompt[prompt.length - 1];
-
-        if (!lastMessage) {
-            return "";
-        }
-
-        const content = lastMessage.content;
-        if (Array.isArray(content)) {
-            // Extract text from content parts
-            return content
-                .map((part) => (part.type === "text" ? part.text : ""))
-                .join("");
-        } else if (typeof content === "string") {
-            return content;
-        }
-
-        return "";
-    }
-
     /**
      * Convert AI SDK prompt messages to node-llama-cpp chat history format
      * This allows us to properly handle multi-turn conversations with tool calls
@@ -397,11 +374,16 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
     ): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
         const session = await this.providerInstance.getSession();
 
-        console.log("\n\n========== doGenerate called ==========");
-        console.log("Prompt has", options.prompt.length, "messages");
+        // Always set chat history to make provider stateless
+        const chatHistory = this.convertToLlamaChatHistory(options.prompt);
 
-        // Extract text from prompt messages
-        const promptText = this.extractPromptText(options.prompt);
+        // Clear existing history first to ensure stateless behavior
+        session.setChatHistory([]);
+        session.setChatHistory(chatHistory);
+
+        // Since we set the full chat history (including the latest user message),
+        // we should always pass an empty string to promptWithMeta to avoid duplication
+        const promptText = "";
 
         // Track tool calls that trigger during generation
         const toolCallsTriggered: Array<{
@@ -513,27 +495,16 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
     ): Promise<Awaited<ReturnType<LanguageModelV2["doStream"]>>> {
         const session = await this.providerInstance.getSession();
 
-        // Check if this is a continuation with tool results
-        const hasToolResults = options.prompt.some(
-            (msg) =>
-                msg.role === "tool" ||
-                (Array.isArray(msg.content) &&
-                    msg.content.some((c: any) => c.type === "tool-result"))
-        );
+        // Always set chat history to make provider stateless
+        const chatHistory = this.convertToLlamaChatHistory(options.prompt);
 
-        // Convert AI SDK prompt to llama chat history and set it on the session
-        // This allows the model to see the full conversation context including tool results
-        if (options.prompt.length > 1 || hasToolResults) {
-            const chatHistory = this.convertToLlamaChatHistory(options.prompt);
-            // Set the chat history on the session
-            session.setChatHistory(chatHistory);
-        }
+        // Clear existing history first to ensure stateless behavior
+        session.setChatHistory([]);
+        session.setChatHistory(chatHistory);
 
-        // For continuation (has tool results), we don't need to prompt with text
-        // The session already has the full history, we just need to continue generation
-        const promptText = hasToolResults
-            ? ""
-            : this.extractPromptText(options.prompt);
+        // Since we set the full chat history (including the latest user message),
+        // we should always pass an empty string to promptWithMeta to avoid duplication
+        const promptText = "";
 
         // Track if tool calling triggered an abort
         let toolCallAborted = false;
