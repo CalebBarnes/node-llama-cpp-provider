@@ -14,6 +14,7 @@ import {
     resolveModelFile,
     defineChatSessionFunction,
     type ChatSessionModelFunctions,
+    LlamaGrammar,
 } from "node-llama-cpp";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -125,8 +126,6 @@ export class NodeLlamaCppProvider {
         }
 
         this.initPromise = (async () => {
-            const llama = await getLlama();
-
             const cwd = process.cwd();
             // Resolve model path
             const modelsDir =
@@ -139,6 +138,7 @@ export class NodeLlamaCppProvider {
 
             // Load model if not provided
             if (!this.llamaModel) {
+                const llama = await getLlama();
                 console.log(
                     `${chalk.blue("ℹ")} Loading model: ${this.config.model}`
                 );
@@ -193,6 +193,17 @@ export class NodeLlamaCppProvider {
             throw new Error("Session not initialized");
         }
         return this.session;
+    }
+
+    /**
+     * Get the model (initializes if needed)
+     */
+    async getModel(): Promise<LlamaModel> {
+        await this.initialize();
+        if (!this.llamaModel) {
+            throw new Error("Model not initialized");
+        }
+        return this.llamaModel;
     }
 }
 
@@ -381,8 +392,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
         session.setChatHistory([]);
         session.setChatHistory(chatHistory);
 
-        // Since we set the full chat history (including the latest user message),
-        // we should always pass an empty string to promptWithMeta to avoid duplication
         const promptText = "";
 
         // Track tool calls that trigger during generation
@@ -392,8 +401,20 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
             toolCallId: string;
         }> = [];
 
-        // AbortController to stop generation when a tool is called
+        // AbortController to stop generation when a tool is called to let the AI SDK execute the tool
         const abortController = new AbortController();
+
+        // Handle structured output with JSON schema
+        let grammar: LlamaGrammar | undefined = undefined;
+        if (
+            options.responseFormat?.type === "json" &&
+            options.responseFormat.schema
+        ) {
+            const model = await this.providerInstance.getModel();
+            grammar = await model.llama.createGrammarForJsonSchema(
+                options.responseFormat.schema as any
+            );
+        }
 
         // Convert AI SDK tools with abort support
         let functions: ChatSessionModelFunctions | undefined = undefined;
@@ -448,6 +469,7 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
             signal: abortController.signal,
             stopOnAbortSignal: true,
             functions,
+            grammar: grammar as any,
         });
 
         // Check if we aborted due to tool calls
@@ -460,7 +482,8 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                 type: "tool-call" as const,
                 toolCallId: tc.toolCallId,
                 toolName: tc.name,
-                args: tc.params,
+                input: tc.params,
+                // args: tc.params,
             }));
 
             return {
@@ -506,6 +529,20 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
         // we should always pass an empty string to promptWithMeta to avoid duplication
         const promptText = "";
 
+        // Handle structured output with JSON schema
+        let grammar: any = undefined;
+
+        if (
+            options.responseFormat?.type === "json" &&
+            options.responseFormat.schema
+        ) {
+            const model = await this.providerInstance.getModel();
+
+            grammar = await model.llama.createGrammarForJsonSchema(
+                options.responseFormat.schema as any
+            );
+        }
+
         // Track if tool calling triggered an abort
         let toolCallAborted = false;
 
@@ -528,6 +565,7 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                         customStopTriggers: options.stopSequences,
                         signal: abortController.signal,
                         stopOnAbortSignal: true,
+                        grammar,
                         functions: self.convertTools({
                             tools: options.tools || [],
                             abortController,
@@ -579,6 +617,16 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                                     id: textId,
                                 });
                                 textStartSent = true;
+
+                                // When using structured output grammar, the root character defined in the grammar is an opening brace "{"
+                                // so the llm might not include it in the first chunk. Prepend it manually if it's not there.
+                                if (grammar && !chunk.startsWith("{")) {
+                                    controller.enqueue({
+                                        type: "text-delta",
+                                        id: textId,
+                                        delta: '{ "',
+                                    });
+                                }
                             }
                             controller.enqueue({
                                 type: "text-delta",

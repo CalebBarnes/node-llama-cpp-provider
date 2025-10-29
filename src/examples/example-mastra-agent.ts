@@ -5,8 +5,11 @@ import z from "zod";
 const agent = mastra.getAgent("localAgent");
 
 async function main() {
-    const output = await agent.stream("My name is Caleb. Whats my name?", {
+    const output = await agent.stream("Whats my name?", {
         structuredOutput: {
+            // node-llama-cpp currently doesn't support grammar combined with functions (structuredOutput + tools)
+            // adding model here to use structuring agent
+            model: await agent.getModel(),
             schema: z.object({
                 name: z.string(),
             }),
@@ -38,5 +41,9 @@ async function main() {
             console.log(chunk);
         }
     }
+
+    console.log(`Final object output:\n`);
+    const object = await output.object;
+    console.log(object);
 }
 main();
