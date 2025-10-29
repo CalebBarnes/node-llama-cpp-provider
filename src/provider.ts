@@ -358,13 +358,10 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                 description: tool.description || "",
                 params: tool.inputSchema as any,
                 async handler(params: any) {
-                    console.log(`[Tool handler called: ${tool.name}]`, params);
-
                     // Call the callback - this will emit events and handle the tool call
                     onToolCall(tool.name, params);
 
-                    // Abort generation so AI SDK can execute the tool
-                    console.log(`[Aborting generation for tool: ${tool.name}]`);
+                    // Abort generation so Mastra or AI SDK can execute the tool
                     abortController.abort("tool-call-detected");
 
                     // Return value doesn't matter since we aborted
@@ -531,13 +528,11 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
 
         // Handle structured output with JSON schema
         let grammar: any = undefined;
-
         if (
             options.responseFormat?.type === "json" &&
             options.responseFormat.schema
         ) {
             const model = await this.providerInstance.getModel();
-
             grammar = await model.llama.createGrammarForJsonSchema(
                 options.responseFormat.schema as any
             );
@@ -545,7 +540,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
 
         // Track if tool calling triggered an abort
         let toolCallAborted = false;
-
         // AbortController to stop generation when a tool is called
         const abortController = new AbortController();
 
@@ -557,6 +551,8 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                 try {
                     let textStartSent = false;
                     let textEndSent = false;
+                    let reasoningStartSent = false;
+                    let reasoningEndSent = false;
 
                     await session.promptWithMeta(promptText, {
                         temperature: options.temperature,
@@ -570,11 +566,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                             tools: options.tools || [],
                             abortController,
                             onToolCall: (toolName: string, params: any) => {
-                                console.log(
-                                    `[Tool call triggered: ${toolName}]`,
-                                    params
-                                );
-
                                 // Close any open text/reasoning streams
                                 if (textStartSent && !textEndSent) {
                                     controller.enqueue({
@@ -582,6 +573,14 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                                         id: textId,
                                     });
                                     textEndSent = true;
+                                }
+
+                                if (reasoningStartSent && !reasoningEndSent) {
+                                    controller.enqueue({
+                                        type: "reasoning-end",
+                                        id: reasoningId,
+                                    });
+                                    reasoningEndSent = true;
                                 }
 
                                 // Emit the tool-call event
@@ -645,12 +644,14 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                                         type: "reasoning-start",
                                         id: reasoningId,
                                     });
+                                    reasoningStartSent = true;
                                 }
                                 if (chunk.segmentEndTime) {
                                     controller.enqueue({
                                         type: "reasoning-end",
                                         id: reasoningId,
                                     });
+                                    reasoningEndSent = true;
                                 }
                                 if (chunk.text) {
                                     controller.enqueue({
@@ -718,4 +719,22 @@ export function createNodeLlamaCppProvider(
     config: NodeLlamaCppProviderConfig
 ): NodeLlamaCppProvider {
     return new NodeLlamaCppProvider(config);
+}
+
+export function llama(
+    /**
+     * Path or HuggingFace model identifier
+     * Example: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf"
+     * Example: "/path/to/model.gguf"
+     */
+    model: string,
+    /**
+     * Configuration options
+     */
+    config?: Omit<NodeLlamaCppProviderConfig, "model">
+): LanguageModelV2 {
+    return new NodeLlamaCppProvider({
+        model,
+        ...config,
+    }).chat();
 }
