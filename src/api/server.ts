@@ -8,8 +8,11 @@ import { fileURLToPath } from "url";
 import path from "path";
 import chalk from "chalk";
 import { getLlama, LlamaChatSession, resolveModelFile } from "node-llama-cpp";
-import type { ChatCompletionRequest, ModelsListResponse } from "./types.js";
-import { handleChatCompletion, handleStreamingChatCompletionWithCallback } from "./openai-handler.js";
+import type { ChatCompletionRequest, ModelsListResponse } from "../types.js";
+import {
+    handleChatCompletion,
+    handleStreamingChatCompletionWithCallback,
+} from "./openai-handler.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const modelsDirectory = path.join(__dirname, "..", "models");
@@ -104,9 +107,13 @@ app.post("/v1/chat/completions", async (req: Request, res: Response) => {
             res.setHeader("Cache-Control", "no-cache");
             res.setHeader("Connection", "keep-alive");
 
-            await handleStreamingChatCompletionWithCallback(session, request, (chunk) => {
-                res.write(chunk);
-            });
+            await handleStreamingChatCompletionWithCallback(
+                session,
+                request,
+                (chunk) => {
+                    res.write(chunk);
+                }
+            );
 
             res.end();
         } else {
@@ -118,7 +125,10 @@ app.post("/v1/chat/completions", async (req: Request, res: Response) => {
         console.error(chalk.red("Error handling chat completion:"), error);
         res.status(500).json({
             error: {
-                message: error instanceof Error ? error.message : "Internal server error",
+                message:
+                    error instanceof Error
+                        ? error.message
+                        : "Internal server error",
                 type: "internal_error",
             },
         });
@@ -131,7 +141,11 @@ async function start() {
         await initializeModel();
 
         app.listen(PORT, () => {
-            console.log(chalk.green(`\n✓ OpenAI-compatible server running on http://localhost:${PORT}`));
+            console.log(
+                chalk.green(
+                    `\n✓ OpenAI-compatible server running on http://localhost:${PORT}`
+                )
+            );
             console.log(chalk.blue("\nEndpoints:"));
             console.log(chalk.blue(`  GET  /health`));
             console.log(chalk.blue(`  GET  /v1/models`));

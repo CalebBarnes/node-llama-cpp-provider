@@ -5,25 +5,15 @@
  */
 
 import chalk from "chalk";
-import { createNodeLlamaCppProvider } from "./provider.js";
+import { createNodeLlamaCppProvider } from "../provider.js";
 import { generateText, streamText, tool, stepCountIs } from "ai";
 import z from "zod";
 
 async function main() {
-    console.log(
-        chalk.yellow("Creating provider (auto-initializes on first use)...\n")
-    );
-
-    // Create the AI SDK provider - just pass the model path!
-    // No need to manually initialize llama, model, context, or session
     const provider = createNodeLlamaCppProvider({
         modelPath: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf",
         modelId: "gpt-oss-20b",
         contextSize: 8096,
-        // Optional: specify models directory (defaults to "./models")
-        // modelsDirectory: "./models",
-        // Optional: GPU acceleration
-        // gpuLayers: 32,
     });
 
     const myTool = tool({
@@ -39,16 +29,22 @@ async function main() {
     });
 
     // Test: Streaming with multi-step tool calling
-    console.log(chalk.blue("Testing streamText with multi-step tool calling\n"));
+    console.log(
+        chalk.blue("Testing streamText with multi-step tool calling\n")
+    );
     let stepNum = 0;
     const { fullStream } = streamText({
         model: provider.chat(),
         prompt: "Call the myTool with name 'Caleb' and then explain what the greeting means",
         tools: { myTool },
-        stopWhen: stepCountIs(3), // Limit to 3 steps to see if it generates final text
+        stopWhen: stepCountIs(3),
         onStepFinish: (step) => {
             stepNum++;
-            console.log(chalk.yellow(`\n[Step ${stepNum} finished]`), "- finish reason:", step.finishReason);
+            console.log(
+                chalk.yellow(`\n[Step ${stepNum} finished]`),
+                "- finish reason:",
+                step.finishReason
+            );
         },
     });
 

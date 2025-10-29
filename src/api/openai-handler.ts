@@ -1,15 +1,10 @@
-/**
- * OpenAI-compatible chat completion handler
- * This module provides pure functions that can be used directly or via API
- */
-
 import type { LlamaChatSession } from "node-llama-cpp";
 import type {
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionStreamChunk,
     ChatMessage,
-} from "./types.js";
+} from "../types.js";
 
 /**
  * Generate a unique ID for chat completion responses
@@ -25,7 +20,12 @@ function messagesToPrompt(messages: ChatMessage[]): string {
     // Simple conversion - you may want to customize this based on your model
     return messages
         .map((msg) => {
-            const role = msg.role === "system" ? "System" : msg.role === "user" ? "User" : "Assistant";
+            const role =
+                msg.role === "system"
+                    ? "System"
+                    : msg.role === "user"
+                    ? "User"
+                    : "Assistant";
             return `${role}: ${msg.content}`;
         })
         .join("\n\n");
@@ -50,7 +50,11 @@ export async function handleChatCompletion(
         maxTokens: request.max_tokens,
         temperature: request.temperature,
         topP: request.top_p,
-        customStopTriggers: Array.isArray(request.stop) ? request.stop : request.stop ? [request.stop] : undefined,
+        customStopTriggers: Array.isArray(request.stop)
+            ? request.stop
+            : request.stop
+            ? [request.stop]
+            : undefined,
     });
 
     // Format as OpenAI response
@@ -99,7 +103,11 @@ export async function* handleStreamingChatCompletion(
         maxTokens: request.max_tokens,
         temperature: request.temperature,
         topP: request.top_p,
-        customStopTriggers: Array.isArray(request.stop) ? request.stop : request.stop ? [request.stop] : undefined,
+        customStopTriggers: Array.isArray(request.stop)
+            ? request.stop
+            : request.stop
+            ? [request.stop]
+            : undefined,
         onTextChunk(chunk) {
             const streamChunk: ChatCompletionStreamChunk = {
                 id,
@@ -109,7 +117,9 @@ export async function* handleStreamingChatCompletion(
                 choices: [
                     {
                         index: 0,
-                        delta: isFirst ? { role: "assistant", content: chunk } : { content: chunk },
+                        delta: isFirst
+                            ? { role: "assistant", content: chunk }
+                            : { content: chunk },
                         finish_reason: null,
                     },
                 ],
@@ -161,7 +171,11 @@ export async function handleStreamingChatCompletionWithCallback(
         maxTokens: request.max_tokens,
         temperature: request.temperature,
         topP: request.top_p,
-        customStopTriggers: Array.isArray(request.stop) ? request.stop : request.stop ? [request.stop] : undefined,
+        customStopTriggers: Array.isArray(request.stop)
+            ? request.stop
+            : request.stop
+            ? [request.stop]
+            : undefined,
         onTextChunk(chunk) {
             const streamChunk: ChatCompletionStreamChunk = {
                 id,
@@ -171,7 +185,9 @@ export async function handleStreamingChatCompletionWithCallback(
                 choices: [
                     {
                         index: 0,
-                        delta: isFirst ? { role: "assistant", content: chunk } : { content: chunk },
+                        delta: isFirst
+                            ? { role: "assistant", content: chunk }
+                            : { content: chunk },
                         finish_reason: null,
                     },
                 ],
