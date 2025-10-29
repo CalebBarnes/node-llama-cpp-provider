@@ -313,10 +313,13 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                                     );
 
                                 if (functionCall) {
-                                    functionCall.result =
-                                        part.output.type === "json"
-                                            ? part.output.value
-                                            : part.output;
+                                    // Extract the actual value from the tool result
+                                    // AI SDK wraps it in { type: "text" | "json", value: ... }
+                                    const result = part.output.type === "json" || part.output.type === "text"
+                                        ? part.output.value
+                                        : part.output;
+
+                                    functionCall.result = result;
                                 }
                             }
                         }
@@ -427,11 +430,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                     description: tool.description || "",
                     params: tool.inputSchema as any,
                     async handler(params: any) {
-                        console.log(
-                            `[doGenerate: Tool handler called: ${tool.name}]`,
-                            params
-                        );
-
                         // Track the tool call
                         toolCallsTriggered.push({
                             name: tool.name,
@@ -440,9 +438,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                         });
 
                         // Abort the generation
-                        console.log(
-                            `[doGenerate: Aborting generation for tool: ${tool.name}]`
-                        );
                         abortController.abort("tool-call-detected");
 
                         return {
@@ -471,10 +466,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
 
         // Check if we aborted due to tool calls
         if (toolCallsTriggered.length > 0) {
-            console.log(
-                `[doGenerate: Generation was aborted for ${toolCallsTriggered.length} tool call(s)]`
-            );
-
             const toolCalls = toolCallsTriggered.map((tc) => ({
                 type: "tool-call" as const,
                 toolCallId: tc.toolCallId,
@@ -544,15 +535,13 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
         const abortController = new AbortController();
 
         const textId = randomUUID();
-        const reasoningId = randomUUID();
         const self = this;
         const stream = new ReadableStream<LanguageModelV2StreamPart>({
             async start(controller) {
                 try {
                     let textStartSent = false;
                     let textEndSent = false;
-                    let reasoningStartSent = false;
-                    let reasoningEndSent = false;
+                    let currentReasoningId: string | null = null;
 
                     await session.promptWithMeta(promptText, {
                         temperature: options.temperature,
@@ -575,12 +564,13 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                                     textEndSent = true;
                                 }
 
-                                if (reasoningStartSent && !reasoningEndSent) {
+                                // Close any open reasoning segment
+                                if (currentReasoningId) {
                                     controller.enqueue({
                                         type: "reasoning-end",
-                                        id: reasoningId,
+                                        id: currentReasoningId,
                                     });
-                                    reasoningEndSent = true;
+                                    currentReasoningId = null;
                                 }
 
                                 // Emit the tool-call event
@@ -640,25 +630,36 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                                 chunk.segmentType === "thought"
                             ) {
                                 if (chunk.segmentStartTime) {
+                                    // Generate a new ID for each reasoning segment
+                                    currentReasoningId = randomUUID();
                                     controller.enqueue({
                                         type: "reasoning-start",
-                                        id: reasoningId,
+                                        id: currentReasoningId,
                                     });
-                                    reasoningStartSent = true;
-                                }
-                                if (chunk.segmentEndTime) {
-                                    controller.enqueue({
-                                        type: "reasoning-end",
-                                        id: reasoningId,
-                                    });
-                                    reasoningEndSent = true;
                                 }
                                 if (chunk.text) {
+                                    if (!currentReasoningId) {
+                                        currentReasoningId = randomUUID();
+                                        controller.enqueue({
+                                            type: "reasoning-start",
+                                            id: currentReasoningId,
+                                        });
+                                    }
                                     controller.enqueue({
                                         type: "reasoning-delta",
-                                        id: reasoningId,
+                                        id: currentReasoningId,
                                         delta: chunk.text,
                                     });
+                                }
+                                if (
+                                    chunk.segmentEndTime &&
+                                    currentReasoningId
+                                ) {
+                                    controller.enqueue({
+                                        type: "reasoning-end",
+                                        id: currentReasoningId,
+                                    });
+                                    currentReasoningId = null; // Reset for next segment
                                 }
                             }
                         },
@@ -693,9 +694,6 @@ class NodeLlamaCppLanguageModel implements LanguageModelV2 {
                 } catch (error) {
                     // Check if this was an abort triggered by tool calling
                     if (toolCallAborted) {
-                        console.log(
-                            "[Generation aborted due to tool call - events already emitted]"
-                        );
                         controller.close();
                         return;
                     }
