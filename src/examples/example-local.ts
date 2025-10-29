@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import chalk from "chalk";
 import { getLlama, LlamaChatSession, resolveModelFile } from "node-llama-cpp";
-import { handleChatCompletion } from "../openai-handler.js";
+import { handleChatCompletion } from "../api/openai-handler.js";
 import type { ChatCompletionRequest } from "../types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

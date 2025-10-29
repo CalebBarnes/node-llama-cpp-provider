@@ -32,7 +32,7 @@ export interface NodeLlamaCppProviderConfig {
      * Example: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf"
      * Example: "/path/to/model.gguf"
      */
-    modelPath: string;
+    model: string;
 
     /**
      * Directory to store downloaded models
@@ -41,10 +41,18 @@ export interface NodeLlamaCppProviderConfig {
     modelsDirectory?: string;
 
     /**
-     * Maximum context size
-     * Default: 8096
+     * The number of tokens the model can see at once.
+     * - **`"auto"`** - adapt to the current VRAM state and attemp to set the context size as high as possible up to the size
+     * the model was trained on.
+     * - **`number`** - set the context size to a specific number of tokens.
+     * If there's not enough VRAM, an error will be thrown.
+     * Use with caution.
+     * - **`{min?: number, max?: number}`** - adapt to the current VRAM state and attemp to set the context size as high as possible
+     * up to the size the model was trained on, but at least `min` and at most `max`.
+     *
+     * Defaults to `"auto"`.
      */
-    contextSize?: number;
+    contextSize?: "auto" | number | { min?: number; max?: number };
 
     /**
      * GPU layers to offload (for GPU acceleration)
@@ -60,15 +68,15 @@ export interface NodeLlamaCppProviderConfig {
     /**
      * If you have your own model/context, pass them here
      */
-    model?: LlamaModel;
-    context?: LlamaContext;
+    llamaModel?: LlamaModel;
+    llamaContext?: LlamaContext;
 }
 
 export class NodeLlamaCppProvider {
     readonly modelId: string;
     private session: LlamaChatSession | null = null;
-    private model: LlamaModel | null = null;
-    private context: LlamaContext | null = null;
+    private llamaModel: LlamaModel | null = null;
+    private llamaContext: LlamaContext | null = null;
     private config: NodeLlamaCppProviderConfig;
     private initPromise: Promise<void> | null = null;
 
@@ -82,8 +90,8 @@ export class NodeLlamaCppProvider {
         }
 
         // If model and context are provided, use them
-        if (config.model) this.model = config.model;
-        if (config.context) this.context = config.context;
+        if (config.llamaModel) this.llamaModel = config.llamaModel;
+        if (config.llamaContext) this.llamaContext = config.llamaContext;
     }
 
     /**
@@ -102,19 +110,20 @@ export class NodeLlamaCppProvider {
         this.initPromise = (async () => {
             const llama = await getLlama();
 
+            const cwd = process.cwd();
             // Resolve model path
             const modelsDir =
-                this.config.modelsDirectory ||
-                path.join(process.cwd(), "models");
+                this.config.modelsDirectory || path.join(cwd, "models");
+
             const modelPath = await resolveModelFile(
-                this.config.modelPath,
+                this.config.model,
                 modelsDir
             );
 
             // Load model if not provided
-            if (!this.model) {
-                console.log(`Loading model: ${this.config.modelPath}`);
-                this.model = await llama.loadModel({
+            if (!this.llamaModel) {
+                console.log(`Loading model: ${this.config.model}`);
+                this.llamaModel = await llama.loadModel({
                     modelPath,
                     gpuLayers: this.config.gpuLayers,
                 });
@@ -122,9 +131,9 @@ export class NodeLlamaCppProvider {
             }
 
             // Create context if not provided
-            if (!this.context) {
-                this.context = await this.model.createContext({
-                    contextSize: { max: this.config.contextSize || 8096 },
+            if (!this.llamaContext) {
+                this.llamaContext = await this.llamaModel.createContext({
+                    contextSize: { max: this.config.contextSize },
                 });
             }
 
@@ -132,7 +141,7 @@ export class NodeLlamaCppProvider {
             this.session = new (
                 await import("node-llama-cpp")
             ).LlamaChatSession({
-                contextSequence: this.context.getSequence(),
+                contextSequence: this.llamaContext.getSequence(),
             });
         })();
 

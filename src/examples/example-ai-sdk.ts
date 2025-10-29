@@ -6,12 +6,12 @@
 
 import chalk from "chalk";
 import { createNodeLlamaCppProvider } from "../provider.js";
-import { generateText, streamText, tool, stepCountIs } from "ai";
+import { streamText, tool, stepCountIs } from "ai";
 import z from "zod";
 
 async function main() {
     const provider = createNodeLlamaCppProvider({
-        modelPath: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf",
+        model: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf",
         modelId: "gpt-oss-20b",
         contextSize: 8096,
     });
@@ -21,60 +21,63 @@ async function main() {
         inputSchema: z.object({ name: z.string() }),
         outputSchema: z.object({ result: z.string() }),
         execute: (args) => {
-            console.log(chalk.magenta("\n[Tool executed: myTool]"), args);
             return {
-                result: `Hello ${args.name}! Welcome to the tool calling system.`,
+                result: `Hello ${args.name}! This is the result of the "myTool" tool call.`,
             };
         },
     });
 
-    // Test: Streaming with multi-step tool calling
-    console.log(
-        chalk.blue("Testing streamText with multi-step tool calling\n")
-    );
-    let stepNum = 0;
-    const { fullStream } = streamText({
-        model: provider.chat(),
-        prompt: "Call the myTool with name 'Caleb' and then explain what the greeting means",
-        tools: { myTool },
-        stopWhen: stepCountIs(3),
-        onStepFinish: (step) => {
-            stepNum++;
-            console.log(
-                chalk.yellow(`\n[Step ${stepNum} finished]`),
-                "- finish reason:",
-                step.finishReason
-            );
-        },
-    });
+    const chatModel = provider.chat();
 
-    for await (const chunk of fullStream) {
-        if (chunk.type === "reasoning-start") {
-            console.log(chalk.bold("\nReasoning:"));
-            continue;
-        }
-        if (chunk.type === "text-start") {
-            console.log(chalk.bold("\nText:"));
-            continue;
-        }
-        if (chunk.type === "reasoning-end" || chunk.type === "text-end") {
-            console.log("\n");
-            continue;
+    const call = async (prompt: string) => {
+        console.log(chalk.blue("calling streamText\n"));
+        let stepNum = 0;
+        const { fullStream } = streamText({
+            model: chatModel,
+            prompt,
+            tools: { myTool },
+            stopWhen: stepCountIs(3),
+            onStepFinish: (step) => {
+                stepNum++;
+                console.log(
+                    chalk.yellow(`\n[Step ${stepNum} finished]`),
+                    "- finish reason:",
+                    step.finishReason
+                );
+            },
+        });
+
+        for await (const chunk of fullStream) {
+            if (chunk.type === "reasoning-start") {
+                console.log(chalk.bold("\nReasoning:"));
+                continue;
+            }
+            if (chunk.type === "text-start") {
+                console.log(chalk.bold("\nText:"));
+                continue;
+            }
+            if (chunk.type === "reasoning-end" || chunk.type === "text-end") {
+                console.log("\n");
+                continue;
+            }
+
+            if (chunk.type === "text-delta") {
+                process.stdout.write(chalk.green(chunk.text));
+                continue;
+            }
+            if (chunk.type === "reasoning-delta") {
+                process.stdout.write(chalk.italic(chalk.cyan(chunk.text)));
+                continue;
+            } else {
+                console.log(chunk);
+            }
         }
 
-        if (chunk.type === "text-delta") {
-            process.stdout.write(chalk.green(chunk.text));
-            continue;
-        }
-        if (chunk.type === "reasoning-delta") {
-            process.stdout.write(chalk.italic(chalk.cyan(chunk.text)));
-            continue;
-        } else {
-            console.log(chunk);
-        }
-    }
+        console.log("\n");
+    };
 
-    console.log("\n");
+    await call("What is the capital of France?");
+    await call("Did you see this message twice or only once?");
 }
 
 main().catch((error) => {

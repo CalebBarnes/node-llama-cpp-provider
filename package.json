@@ -37,12 +37,17 @@
     "lint": "npm run lint:eslint",
     "lint:eslint": "eslint --report-unused-disable-directives .",
     "format": "npm run lint:eslint -- --fix",
-    "clean": "rm -rf ./node_modules ./dist ./tsconfig.tsbuildinfo ./models"
+    "clean": "rm -rf ./node_modules ./dist ./tsconfig.tsbuildinfo ./models",
+    "dev": "mastra dev"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.23",
     "@ai-sdk/provider": "^2.0.0",
     "@ai-sdk/provider-utils": "^3.0.13",
+    "@mastra/core": "^0.23.2",
+    "@mastra/libsql": "^0.16.1",
+    "@mastra/loggers": "^0.10.18",
+    "@mastra/memory": "^0.15.10",
     "ai": "^5.0.81",
     "chalk": "^5.4.1",
     "express": "^4.21.2",
@@ -58,6 +63,7 @@
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-jsdoc": "^50.6.11",
     "eslint-plugin-n": "^17.17.0",
+    "mastra": "^0.17.6",
     "rimraf": "^6.0.1",
     "tslib": "^2.8.1",
     "typescript": "^5.8.3",
