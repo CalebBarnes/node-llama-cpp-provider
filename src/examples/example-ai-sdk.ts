@@ -1,21 +1,9 @@
-/**
- * Example: Using the AI SDK provider (SIMPLIFIED - AUTO-INITIALIZING)
- * This shows how to use node-llama-cpp with Vercel AI SDK
- * The provider handles all initialization automatically!
- */
-
 import chalk from "chalk";
-import { createNodeLlamaCppProvider } from "../provider.js";
+import { llama } from "../provider.js";
 import { streamText, tool, stepCountIs } from "ai";
 import z from "zod";
 
 async function main() {
-    const provider = createNodeLlamaCppProvider({
-        model: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf",
-        modelId: "gpt-oss-20b",
-        contextSize: 8096,
-    });
-
     const myTool = tool({
         description: "My tool that greets someone",
         inputSchema: z.object({ name: z.string() }),
@@ -27,13 +15,11 @@ async function main() {
         },
     });
 
-    const chatModel = provider.chat();
-
     const call = async (prompt: string) => {
         console.log(chalk.blue("calling streamText\n"));
         let stepNum = 0;
         const { fullStream } = streamText({
-            model: chatModel,
+            model: llama("hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf"),
             prompt,
             tools: { myTool },
             stopWhen: stepCountIs(3),
@@ -77,7 +63,6 @@ async function main() {
     };
 
     await call("What is the capital of France?");
-    await call("Did you see this message twice or only once?");
 }
 
 main().catch((error) => {

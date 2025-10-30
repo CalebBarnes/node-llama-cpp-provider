@@ -8,7 +8,7 @@ async function main() {
     const output = await agent.stream("Whats my name?", {
         structuredOutput: {
             // node-llama-cpp currently doesn't support grammar combined with functions (structuredOutput + tools)
-            // adding model here to use structuring agent
+            // adding model here to force use of a sub structuring agent
             model: await agent.getModel(),
             schema: z.object({
                 name: z.string(),
