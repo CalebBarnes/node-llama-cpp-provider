@@ -135,27 +135,34 @@ export class NodeLlamaCppProvider {
             const modelsDir =
                 this.config.modelsDirectory || defaultModelsDirectory;
 
-            const modelPath = await resolveModelFile(
-                this.config.model,
-                modelsDir
-            );
+            const modelPath = await resolveModelFile(this.config.model, {
+                directory: modelsDir,
+            });
 
             // Load model if not provided
             if (!this.llamaModel) {
                 const llama = await getLlama();
                 console.log(
-                    `${chalk.blue("ℹ")} Loading model: ${this.config.model}`
+                    `${chalk.blue("ℹ")} Loading ${
+                        this.config.model.startsWith("hf:")
+                            ? "Hugging Face"
+                            : "local"
+                    } model: ${this.config.model.replace("hf:", "")}`
                 );
+                const startTime = new Date();
                 this.llamaModel = await llama.loadModel({
                     modelPath,
                     gpuLayers: this.config.gpuLayers,
                 });
+                const endTime = new Date();
+                const duration = endTime.getTime() - startTime.getTime();
+
                 const bytes = this.llamaModel?.fileInsights?.modelSize;
                 const gigabytes = bytes / 1024 / 1024 / 1024;
                 console.log(
-                    `${chalk.green("✔")} Model loaded ${
-                        bytes ? `${gigabytes.toFixed(2)} GB` : ""
-                    }`
+                    `${chalk.green("✔")} Model loaded in ${duration}ms ${
+                        bytes ? `(${gigabytes.toFixed(2)} GB)` : ""
+                    } `
                 );
             }
 

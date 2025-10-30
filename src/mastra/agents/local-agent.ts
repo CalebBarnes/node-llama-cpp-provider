@@ -15,7 +15,8 @@ export const localAgent = new Agent({
     name: "local-agent",
     instructions: "You are a helpful assistant.",
     memory: new Memory(),
-    model: llama("hf:unsloth/gpt-oss-20b-GGUF/gpt-oss-20b-F16.gguf"),
+    model: llama("hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf"),
+    // model: llama("hf:unsloth/gpt-oss-20b-GGUF/gpt-oss-20b-F16.gguf"),
     tools: {
         nameTool,
     },
