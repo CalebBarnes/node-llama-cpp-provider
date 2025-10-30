@@ -4,7 +4,7 @@ import { LibSQLStore } from "@mastra/libsql";
 import { localAgent } from "./agents/local-agent";
 
 const storage = new LibSQLStore({
-    url: "file:../mastra.db",
+    url: "file:../../mastra.db",
 });
 
 export const mastra = new Mastra({

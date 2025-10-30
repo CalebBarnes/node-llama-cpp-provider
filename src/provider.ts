@@ -18,6 +18,7 @@ import {
 } from "node-llama-cpp";
 import path from "path";
 import { randomUUID } from "crypto";
+import { ModelIdentifier } from "./huggingface-types";
 
 export interface NodeLlamaCppProviderConfig {
     /**
@@ -35,7 +36,7 @@ export interface NodeLlamaCppProviderConfig {
      * Example: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf"
      * Example: "/path/to/model.gguf"
      */
-    model: string;
+    model: ModelIdentifier;
 
     /**
      * Directory to store downloaded models
@@ -45,7 +46,7 @@ export interface NodeLlamaCppProviderConfig {
 
     /**
      * The number of tokens the model can see at once.
-     * - **`"auto"`** - adapt to the current VRAM state and attemp to set the context size as high as possible up to the size
+     * - **`"auto"`** - adapt to the current VRAM state and attempt to set the context size as high as possible up to the size
      * the model was trained on.
      * - **`number`** - set the context size to a specific number of tokens.
      * If there's not enough VRAM, an error will be thrown.
@@ -127,9 +128,12 @@ export class NodeLlamaCppProvider {
 
         this.initPromise = (async () => {
             const cwd = process.cwd();
+            const defaultModelsDirectory = cwd.endsWith(".mastra/output")
+                ? path.join(cwd, "../../models")
+                : "./models";
             // Resolve model path
             const modelsDir =
-                this.config.modelsDirectory || path.join(cwd, "models");
+                this.config.modelsDirectory || defaultModelsDirectory;
 
             const modelPath = await resolveModelFile(
                 this.config.model,
@@ -158,7 +162,7 @@ export class NodeLlamaCppProvider {
             // Create context if not provided
             if (!this.llamaContext) {
                 this.llamaContext = await this.llamaModel.createContext({
-                    contextSize: this.config.contextSize,
+                    contextSize: this.config.contextSize ?? 8192,
                 });
             }
 
@@ -724,14 +728,17 @@ export function createNodeLlamaCppProvider(
 
 export function llama(
     /**
-     * Path or HuggingFace model identifier
-     * Example: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf"
-     * Example: "/path/to/model.gguf"
+     * The model identifier
+     *
+     * Prefixing with `"hf:"` will indicate a Hugging Face model and trigger download of the model file from Hugging Face to the models directory if it is not already present.
+     * - Format: "`hf:<huggingface-username>/<model-name>/<model-file-path>.gguf`"
+     * - Example: "hf:giladgd/gpt-oss-20b-GGUF/gpt-oss-20b.MXFP4.gguf"
+     *
+     *
+     * Without the `"hf:"` prefix, the model will resolve to a local file relative to the models directory
+     * - Example: "some-path/gpt-oss-20b.MXFP4.gguf" -> "./models/some-path/gpt-oss-20b.MXFP4.gguf"
      */
-    model: string,
-    /**
-     * Configuration options
-     */
+    model: ModelIdentifier,
     config?: Omit<NodeLlamaCppProviderConfig, "model">
 ): LanguageModelV2 {
     return new NodeLlamaCppProvider({
